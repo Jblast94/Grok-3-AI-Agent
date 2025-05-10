@@ -1,0 +1,14 @@
+
+# Auto detect text files and ensure they use LF line endings
+* text=auto eol=lf
+
+# Explicitly declare files that are binary and should not be modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.doc binary
+*.docx binary
+*.mp4 binary
+# Add other binary file extensions as needed
