@@ -103,6 +103,168 @@ const tweets = await scraper.getTweetsV2(
 console.log('tweets', tweets);
 ```
 
+## Deploying to AWS EC2
+
+These instructions outline how to set up an AWS EC2 instance to run this application. This guide assumes you have an AWS account and are familiar with basic AWS concepts.
+
+### 1. Launch an EC2 Instance
+
+1.  **Choose an Amazon Machine Image (AMI):**
+    *   Go to the EC2 Dashboard in your AWS Console.
+    *   Click "Launch instance".
+    *   Select an AMI. A common choice is "Amazon Linux 2 AMI" or an "Ubuntu Server" AMI. Ensure it's a 64-bit (x86) or ARM architecture depending on your preference and application needs.
+
+2.  **Choose an Instance Type:**
+    *   Select an instance type based on your application's resource requirements (CPU, memory). For basic testing, a `t2.micro` or `t3.micro` (within the free tier, if eligible) might be sufficient. For production, you'll likely need a more powerful instance.
+
+3.  **Configure Instance Details:**
+    *   **Network:** Select your default VPC or a custom VPC.
+    *   **Subnet:** Choose a subnet.
+    *   **Auto-assign Public IP:** Enable this if you want your instance to be accessible from the internet directly (you can also use an Elastic IP later).
+    *   **IAM role (Optional but Recommended):** If your application needs to interact with other AWS services (e.g., S3, DynamoDB), create an IAM role with the necessary permissions and assign it to the instance.
+
+4.  **Add Storage:**
+    *   Configure the root volume size. The default (e.g., 8GB or 10GB) is often enough for the OS and a small application. Increase if needed.
+
+5.  **Add Tags (Optional):**
+    *   Add tags for easier resource management (e.g., `Name: MyTwitterAppInstance`).
+
+6.  **Configure Security Group:**
+    *   Create a new security group or select an existing one.
+    *   **Crucial:** Add inbound rules:
+        *   **SSH (Port 22):** Allow access from your IP address (or a specific range) so you can connect to the instance.
+        *   **HTTP (Port 80) / HTTPS (Port 443):** If your application serves web content, allow access from "Anywhere" (0.0.0.0/0, ::/0) or specific IPs.
+        *   **Custom TCP Port:** If your application listens on a specific port (e.g., 3000 for a Node.js app), add a rule for that port.
+
+7.  **Review and Launch:**
+    *   Review your instance configuration.
+    *   Click "Launch".
+    *   You will be prompted to select an existing key pair or create a new one. **This is essential for SSH access.** Download the private key (`.pem` file) and store it securely. You will not be able to download it again.
+
+### 2. Connect to Your EC2 Instance
+
+1.  Once your instance is running, select it in the EC2 console and click "Connect".
+2.  Follow the instructions, typically using SSH:
+    ```bash
+    ssh -i /path/to/your-key-pair.pem ec2-user@your-instance-public-dns
+    # Or for Ubuntu:
+    # ssh -i /path/to/your-key-pair.pem ubuntu@your-instance-public-dns
+    ```
+    *   Replace `/path/to/your-key-pair.pem` with the actual path to your downloaded private key.
+    *   Replace `your-instance-public-dns` with the Public IPv4 DNS of your instance.
+    *   Make sure your `.pem` file has the correct permissions (e.g., `chmod 400 your-key-pair.pem`).
+
+### 3. Set Up the Application Environment
+
+1.  **Update the System:**
+    ```bash
+    sudo yum update -y  # For Amazon Linux
+    # sudo apt update && sudo apt upgrade -y # For Ubuntu
+    ```
+
+2.  **Install Node.js and npm:**
+    *   The recommended way is often to use Node Version Manager (nvm) to install and manage Node.js versions.
+    ```bash
+    # Install nvm
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    # Activate nvm
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+    # Verify nvm installation
+    command -v nvm
+    # Install the latest LTS version of Node.js (or a specific version your app needs)
+    nvm install --lts
+    nvm use --lts
+    # Verify Node.js and npm installation
+    node -v
+    npm -v
+    ```
+
+3.  **Install Git (if not already present):**
+    ```bash
+    sudo yum install git -y  # For Amazon Linux
+    # sudo apt install git -y # For Ubuntu
+    ```
+
+4.  **Clone Your Application Repository:**
+    ```bash
+    git clone https://github.com/Jblast94/Grok-3-AI-Agent.git
+    cd Grok-3-AI-Agent/agent-twitter-client-0.0.19 # Navigate into your project directory
+    ```
+    *   If your repository is private, you'll need to configure SSH keys for Git or use HTTPS with credentials/tokens.
+
+5.  **Install Application Dependencies:**
+    *   Navigate to the directory containing your `package.json` (e.g., `agent-twitter-client-0.0.19/` or `agent-twitter-client-0.0.19/backend/` if it's a monorepo structure).
+    ```bash
+    npm install
+    # If you have separate frontend/backend, you might need to run install in respective directories:
+    # cd backend && npm install
+    # cd ../ui && npm install
+    ```
+
+6.  **Configure Environment Variables:**
+    *   Create a `.env` file in the appropriate directory (e.g., `agent-twitter-client-0.0.19/` or `agent-twitter-client-0.0.19/backend/`) with your Twitter credentials and any other required variables, similar to the `.env.example`.
+    ```bash
+    cp .env.example .env
+    nano .env # Or use vim or another editor to set your variables
+    ```
+    *   **Important:** Ensure your `PROXY_URL` is set up correctly if needed, especially if running in a restricted network environment or to avoid IP-based rate limits from Twitter. You might need to set up a proxy server (e.g., Squid) on your EC2 instance or use a third-party proxy service.
+
+### 4. Build and Run Your Application
+
+1.  **Build the Application (if necessary):**
+    *   If your project uses TypeScript or has a build step (check your `package.json` scripts):
+    ```bash
+    npm run build
+    # Or for specific parts if it's a monorepo:
+    # cd backend && npm run build
+    ```
+
+2.  **Run the Application:**
+    *   Use the start command defined in your `package.json`:
+    ```bash
+    npm start
+    # Or, for example, if your main script is backend/dist/index.js:
+    # node backend/dist/index.js
+    ```
+
+3.  **Keep the Application Running (Process Manager):**
+    *   For long-running applications, use a process manager like PM2 to keep your app alive, manage logs, and handle restarts.
+    ```bash
+    sudo npm install pm2 -g  # Install PM2 globally
+    # Start your application with PM2 (adjust the path to your entry script)
+    pm2 start npm --name "twitter-app" -- run start
+    # Or directly:
+    # pm2 start backend/dist/index.js --name "twitter-app"
+
+    # View logs
+    pm2 logs twitter-app
+
+    # List running processes
+    pm2 list
+
+    # Save PM2 process list to resurrect on reboot
+    pm2 save
+    pm2 startup # This will give you a command to run to enable startup on boot
+    ```
+
+### 5. Accessing Your Application
+
+*   If your application is a web server, you should now be able to access it via your EC2 instance's public IP address or DNS name (e.g., `http://your-instance-public-ip:your-app-port`).
+*   If you configured HTTPS, ensure your SSL/TLS certificates are set up correctly (e.g., using Let's Encrypt with Certbot, or AWS Certificate Manager with a Load Balancer).
+
+### Security Best Practices
+
+*   **Principle of Least Privilege:** Ensure your IAM roles and security group rules only grant necessary permissions.
+*   **Regular Updates:** Keep your EC2 instance's OS and software packages updated.
+*   **SSH Key Security:** Protect your `.pem` key. Do not share it.
+*   **Monitoring and Logging:** Set up CloudWatch Alarms and logging for your instance and application.
+*   **Backup:** Regularly back up important data.
+*   **Consider a Load Balancer:** For production, place your EC2 instance(s) behind an Application Load Balancer (ALB) for better scalability, availability, and easier SSL/TLS management.
+*   **Firewall:** Use AWS WAF (Web Application Firewall) for additional protection against common web exploits.
+
+This guide provides a general overview. Specific steps might vary based on your application's architecture and requirements.
 ## API
 
 ### Authentication
